@@ -7,14 +7,24 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"sync"
+	"time"
 
 	"weather-api/internal/service"
 )
+
+const cacheTTL = 5 * time.Minute
+
+type cacheEntry struct {
+	resp      *service.ProviderWeatherResponse
+	expiresAt time.Time
+}
 
 type WeatherClient struct {
 	httpClient *http.Client
 	baseURL    string
 	geoURL     string
+	cache      sync.Map
 }
 
 func NewWeatherClient(httpClient *http.Client) *WeatherClient {
@@ -90,6 +100,13 @@ func (c *WeatherClient) GetCurrentWeather(ctx context.Context, lat, lon float64)
 }
 
 func (c *WeatherClient) GetCurrentCityWeather(ctx context.Context, city string) (*service.ProviderWeatherResponse, error) {
+	if v, ok := c.cache.Load(city); ok {
+		entry := v.(cacheEntry)
+		if time.Now().Before(entry.expiresAt) {
+			return entry.resp, nil
+		}
+	}
+
 	u, err := url.Parse(c.geoURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse geo url: %w", err)
@@ -144,6 +161,8 @@ func (c *WeatherClient) GetCurrentCityWeather(ctx context.Context, city string) 
 	weatherResp.City = cityName
 	weatherResp.Latitude = lat
 	weatherResp.Longitude = lon
+
+	c.cache.Store(city, cacheEntry{resp: weatherResp, expiresAt: time.Now().Add(cacheTTL)})
 
 	return weatherResp, nil
 }

@@ -1,231 +1,148 @@
-# Weather API (Go + chi)
+# Weather App
 
-HTTP-сервис для получения текущей погоды через внешний API (Open-Meteo).
-
----
+REST API сервис на Go с PostgreSQL, который:
+- управляет пользователями
+- позволяет пользователю следить за несколькими городами
+- получает погоду из внешнего API
+- сохраняет историю погодных запросов
+- поддерживает фильтрацию истории по городу
 
 ## Запуск
 
 ```bash
-go mod tidy
-go run ./cmd/app
+# Применить миграцию
+psql $DATABASE_URL -f migrations/001_init.sql
+
+# Запустить сервер
+DATABASE_URL=postgres://akydyrbay@/weather_db go run ./cmd/app
 ```
 
-Сервер стартует на:
+Сервер стартует на `http://localhost:8080`.
 
-```
-http://localhost:8080
-```
+## Эндпоинты
 
----
-
-## Проверка
-
-### 🔹 Healthcheck
+### Healthcheck
 
 ```bash
 curl http://localhost:8080/health
 ```
 
-Ответ:
+### Погода
 
-```json
-{"status":"ok"}
-```
-
----
-
-### 🔹 Получение погоды
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/weather?lat=&lon=` | Погода по координатам |
+| GET | `/weather/{city}` | Погода в городе + рекомендация по одежде |
+| GET | `/weather/country/{country}` | Погода по городам страны |
+| GET | `/weather/country/{country}/top` | Топ-3 самых тёплых города |
 
 ```bash
-curl "http://localhost:8080/api/weather?lat=43.2389&lon=76.8897"
-```
-
-Пример ответа:
-
-```json
-{
-  "latitude": 43.2389,
-  "longitude": 76.8897,
-  "temperature": 18.4,
-  "wind_speed": 7.2,
-  "weather_code": 1,
-  "time": "2026-04-14T14:00",
-  "description": "Переменная облачность"
-}
-```
-
----
-
-### 🔹 Погода в городе
- 
-```
-GET /weather/{city}
-```
- 
-```bash
+curl "http://localhost:8080/weather?lat=43.25&lon=76.92"
 curl http://localhost:8080/weather/Almaty
-```
- 
-Ответ:
- 
-```json
-{
-  "city": "Almaty",
-  "latitude": 43.25,
-  "longitude": 76.9167,
-  "temperature": 12.3,
-  "wind_speed": 5.1,
-  "weather_code": 0,
-  "time": "2026-04-14T14:00",
-  "description": "Ясно",
-  "clothing": "куртка"
-}
-```
----
-
-Поле `clothing` формируется на основе температуры:
-- холодно — тёплая одежда
-- прохладно — куртка
-- тепло — лёгкая одежда
-
- 
---- 
-
- 
-### 🔹 Погода по стране
- 
-```
-GET /weather/country/{country}
-```
- 
-Возвращает список городов страны с текущей погодой.
- 
-```bash
 curl http://localhost:8080/weather/country/Kazakhstan
-```
- 
-Ответ:
- 
-```json
-[
-  {
-    "city": "Almaty",
-    "latitude": 43.25,
-    "longitude": 76.9167,
-    "temperature": 12.3,
-    "wind_speed": 5.1,
-    "weather_code": 0,
-    "time": "2026-04-14T14:00",
-    "description": "Ясно"
-  },
-  {
-    "city": "Astana",
-    "latitude": 51.1801,
-    "longitude": 71.446,
-    "temperature": 4.7,
-    "wind_speed": 11.2,
-    "weather_code": 3,
-    "time": "2026-04-14T14:00",
-    "description": "Переменная облачность"
-  }
-]
-```
- 
----
- 
-### 🔹 Топ-3 самых тёплых города страны
- 
-```
-GET /weather/country/{country}/top
-```
- 
-Возвращает три города с наибольшей температурой, отсортированные по убыванию.
- 
-```bash
 curl http://localhost:8080/weather/country/Kazakhstan/top
 ```
- 
-Ответ:
- 
+
+### Пользователи
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| POST | `/users` | Создать пользователя |
+| GET | `/users` | Список пользователей |
+| GET | `/users/{id}` | Получить пользователя |
+| PUT | `/users/{id}` | Обновить пользователя |
+| DELETE | `/users/{id}` | Мягкое удаление |
+
+```bash
+curl -X POST http://localhost:8080/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Алибек","email":"ali@example.com"}'
+
+curl http://localhost:8080/users/1
+
+curl -X PUT http://localhost:8080/users/1 \
+  -d '{"name":"Алибек Б.","email":"ali@example.com"}'
+
+curl -X DELETE http://localhost:8080/users/1
+```
+
+### Города пользователя
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| POST | `/users/{id}/cities` | Добавить город |
+| GET | `/users/{id}/cities` | Список городов |
+| DELETE | `/users/{id}/cities/{city_id}` | Удалить город |
+
+```bash
+curl -X POST http://localhost:8080/users/1/cities \
+  -d '{"city":"Almaty"}'
+
+curl http://localhost:8080/users/1/cities
+
+curl -X DELETE http://localhost:8080/users/1/cities/3
+```
+
+### Погода пользователя
+
+Запрашивает погоду по всем городам пользователя параллельно и сохраняет результаты в историю.
+
+```bash
+curl http://localhost:8080/users/1/weather
+```
+
 ```json
-[
-  {
-    "city": "Shymkent",
-    "latitude": 42.3,
-    "longitude": 69.6,
-    "temperature": 10.1,
-    "wind_speed": 23.5,
-    "weather_code": 61,
-    "time": "2026-04-16T23:45",
-    "description": "Дождь"
-  },
-  {
-    "city": "Atyrau",
-    "latitude": 47.1167,
-    "longitude": 51.8833,
-    "temperature": 8.3,
-    "wind_speed": 16.2,
-    "weather_code": 1,
-    "time": "2026-04-16T23:45",
-    "description": "Переменная облачность"
-  },
-  {
-    "city": "Almaty",
-    "latitude": 43.25,
-    "longitude": 76.9167,
-    "temperature": 8.2,
-    "wind_speed": 1.5,
-    "weather_code": 3,
-    "time": "2026-04-16T23:45",
-    "description": "Переменная облачность"
-  }
-]
-```
- 
----
- 
-## Поддерживаемые страны
- 
-| Название   | Параметр запроса |
-|------------|-----------------|
-| Казахстан  | `Kazakhstan`    |
-| Россия     | `Russia`        |
-| США        | `USA`           |
-| Германия   | `Germany`       |
-| Франция    | `France`        |
-| Китай      | `China`         |
-| Япония     | `Japan`         |
-| Индия      | `India`         |
-| Бразилия   | `Brazil`        |
-| Канада     | `Canada`        |
- 
----
-
-## Где взять координаты
-
-Проще всего через Google Maps — клик по карте → копировать координаты.
-
----
-
-## Структура
-
-```
-cmd/app         — точка входа
-internal/handler — HTTP слой
-internal/service — бизнес-логика
-internal/client  — внешний API
+{
+  "user_id": 1,
+  "results": [
+    {
+      "city": "Almaty",
+      "temperature": 12.3,
+      "description": "Ясно",
+      "clothing": "куртка"
+    }
+  ]
+}
 ```
 
----
+### История погоды
+
+```bash
+# Только Алматы, последние 10 записей
+curl "http://localhost:8080/users/1/weather/history?city=Almaty&limit=10"
+
+# Вся история с пагинацией
+curl "http://localhost:8080/users/1/weather/history?limit=20&offset=40"
+```
+
+Параметры запроса:
+
+| Параметр | Обязательный | Описание |
+|----------|-------------|----------|
+| `city` | нет | Фильтр по городу |
+| `limit` | нет | Максимум записей |
+| `offset` | нет | Смещение (пагинация) |
+
+```json
+{
+  "user_id": 1,
+  "city": "Almaty",
+  "history": [
+    {
+      "temperature": 18,
+      "description": "Ясно",
+      "requested_at": "2026-04-20T10:00:00Z"
+    }
+  ]
+}
+```
 
 ## Стек
-
-* Go
-* net/http
-* go-chi
-* JSON
-* Open-Meteo API
-* Open-Meteo Geocoding
-
----
+ 
+- **Go**, **net/http**, **go-chi/chi** - сервер и роутинг
+- **pgx/v5** - PostgreSQL
+- **Open-Meteo** - погода и геокодинг (без ключа)
+- Параллельные запросы к API через горутины
+- Кэш погоды в памяти (TTL 5 минут)
+- Мягкое удаление пользователей
+- Индекс `(user_id, city)` для быстрой фильтрации истории
