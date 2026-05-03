@@ -1,6 +1,6 @@
 # Weather App
 
-REST API сервис на Go с PostgreSQL, который:
+REST API сервис на Go с PostgreSQL, Auth, Security который:
 - управляет пользователями
 - позволяет пользователю следить за несколькими городами
 - получает погоду из внешнего API
@@ -10,11 +10,11 @@ REST API сервис на Go с PostgreSQL, который:
 ## Запуск
 
 ```bash
-# Применить миграцию
+# Применить миграции
 psql $DATABASE_URL -f migrations/001_init.sql
 
 # Запустить сервер
-DATABASE_URL=postgres://akydyrbay@/weather_db go run ./cmd/app
+DATABASE_URL=postgres://akydyrbay@/weather_db JWT_SECRET=your_secret go run ./cmd/app
 ```
 
 Сервер стартует на `http://localhost:8080`.
@@ -25,6 +25,28 @@ DATABASE_URL=postgres://akydyrbay@/weather_db go run ./cmd/app
 
 ```bash
 curl http://localhost:8080/health
+```
+
+### Аутентификация
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| POST | `/auth/register` | Регистрация |
+| POST | `/auth/login` | Вход, возвращает JWT |
+
+```bash
+curl -X POST http://localhost:8080/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Алибек","email":"ali@example.com","password":"secret"}'
+
+curl -X POST http://localhost:8080/auth/login \
+  -d '{"email":"ali@example.com","password":"secret"}'
+# → {"access_token":"<jwt>"}
+```
+
+Защищённые маршруты требуют заголовок:
+```
+Authorization: Bearer <access_token>
 ```
 
 ### Погода
@@ -38,57 +60,66 @@ curl http://localhost:8080/health
 
 ```bash
 curl "http://localhost:8080/weather?lat=43.25&lon=76.92"
+
 curl http://localhost:8080/weather/Almaty
+
 curl http://localhost:8080/weather/country/Kazakhstan
+
 curl http://localhost:8080/weather/country/Kazakhstan/top
 ```
 
 ### Пользователи
 
+> Только для `admin`
+
 | Метод | Путь | Описание |
 |-------|------|----------|
-| POST | `/users` | Создать пользователя |
 | GET | `/users` | Список пользователей |
 | GET | `/users/{id}` | Получить пользователя |
-| PUT | `/users/{id}` | Обновить пользователя |
 | DELETE | `/users/{id}` | Мягкое удаление |
 
 ```bash
-curl -X POST http://localhost:8080/users \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Алибек","email":"ali@example.com"}'
+curl http://localhost:8080/users -H "Authorization: Bearer <token>"
 
-curl http://localhost:8080/users/1
+curl http://localhost:8080/users/1 -H "Authorization: Bearer <token>"
 
-curl -X PUT http://localhost:8080/users/1 \
-  -d '{"name":"Алибек Б.","email":"ali@example.com"}'
+curl -X DELETE http://localhost:8080/users/1 -H "Authorization: Bearer <token>"
+```
 
-curl -X DELETE http://localhost:8080/users/1
+### Текущий пользователь
+
+> Требует авторизацию
+
+```bash
+curl http://localhost:8080/users/me -H "Authorization: Bearer <token>"
 ```
 
 ### Города пользователя
 
+> Требует авторизацию. Пользователь берётся из JWT.
+
 | Метод | Путь | Описание |
 |-------|------|----------|
-| POST | `/users/{id}/cities` | Добавить город |
-| GET | `/users/{id}/cities` | Список городов |
-| DELETE | `/users/{id}/cities/{city_id}` | Удалить город |
+| POST | `/cities` | Добавить город |
+| GET | `/cities` | Список городов |
+| DELETE | `/cities/{city_id}` | Удалить город |
 
 ```bash
-curl -X POST http://localhost:8080/users/1/cities \
+curl -X POST http://localhost:8080/cities \
+  -H "Authorization: Bearer <token>" \
   -d '{"city":"Almaty"}'
 
-curl http://localhost:8080/users/1/cities
+curl http://localhost:8080/cities -H "Authorization: Bearer <token>"
 
-curl -X DELETE http://localhost:8080/users/1/cities/3
+curl -X DELETE http://localhost:8080/cities/3 -H "Authorization: Bearer <token>"
 ```
 
 ### Погода пользователя
 
-Запрашивает погоду по всем городам пользователя параллельно и сохраняет результаты в историю.
+> Требует авторизацию. Запрашивает погоду по всем городам параллельно и сохраняет в историю.
 
 ```bash
-curl http://localhost:8080/users/1/weather
+curl http://localhost:8080/users/weather -H "Authorization: Bearer <token>"
 ```
 
 ```json
@@ -107,15 +138,15 @@ curl http://localhost:8080/users/1/weather
 
 ### История погоды
 
+> Требует авторизацию.
+
 ```bash
-# Только Алматы, последние 10 записей
-curl "http://localhost:8080/users/1/weather/history?city=Almaty&limit=10"
+curl "http://localhost:8080/users/weather/history?city=Almaty&limit=10" \
+  -H "Authorization: Bearer <token>"
 
-# Вся история с пагинацией
-curl "http://localhost:8080/users/1/weather/history?limit=20&offset=40"
+curl "http://localhost:8080/users/weather/history?limit=20&offset=40" \
+  -H "Authorization: Bearer <token>"
 ```
-
-Параметры запроса:
 
 | Параметр | Обязательный | Описание |
 |----------|-------------|----------|
@@ -138,10 +169,12 @@ curl "http://localhost:8080/users/1/weather/history?limit=20&offset=40"
 ```
 
 ## Стек
- 
+
 - **Go**, **net/http**, **go-chi/chi** - сервер и роутинг
 - **pgx/v5** - PostgreSQL
-- **Open-Meteo** - погода и геокодинг (без ключа)
+- **golang-jwt/jwt/v5** - JWT аутентификация
+- **bcrypt** - хэширование паролей
+- **Open Meteo** - погода и геокодинг (без ключа)
 - Параллельные запросы к API через горутины
 - Кэш погоды в памяти (TTL 5 минут)
 - Мягкое удаление пользователей

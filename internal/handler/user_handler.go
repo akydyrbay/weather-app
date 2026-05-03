@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"weather-api/internal/middleware"
 	"weather-api/internal/repository"
 	"weather-api/internal/service"
 )
@@ -25,24 +26,6 @@ func NewUserHandler(
 	return &UserHandler{users: users, weather: weather, cities: cities}
 }
 
-func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
-		return
-	}
-
-	user, err := h.users.Create(r.Context(), body.Name, body.Email)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusCreated, user)
-}
-
 func (h *UserHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := h.users.GetAll(r.Context())
 	if err != nil {
@@ -58,34 +41,9 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid id"})
 		return
 	}
-
 	user, err := h.users.GetByID(r.Context(), id)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, ErrorResponse{Error: "user not found"})
-		return
-	}
-	writeJSON(w, http.StatusOK, user)
-}
-
-func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
-	id, err := parseID(r, "id")
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid id"})
-		return
-	}
-
-	var body struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
-		return
-	}
-
-	user, err := h.users.Update(r.Context(), id, body.Name, body.Email)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, user)
@@ -97,7 +55,6 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid id"})
 		return
 	}
-
 	if err := h.users.Delete(r.Context(), id); err != nil {
 		writeJSON(w, http.StatusNotFound, ErrorResponse{Error: "user not found"})
 		return
@@ -105,12 +62,18 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *UserHandler) AddCity(w http.ResponseWriter, r *http.Request) {
-	userID, err := parseID(r, "id")
+func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFrom(r.Context())
+	user, err := h.users.GetByID(r.Context(), claims.UserID)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid id"})
+		writeJSON(w, http.StatusNotFound, ErrorResponse{Error: "user not found"})
 		return
 	}
+	writeJSON(w, http.StatusOK, user)
+}
+
+func (h *UserHandler) AddCity(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFrom(r.Context())
 
 	var body struct {
 		City string `json:"city"`
@@ -120,21 +83,18 @@ func (h *UserHandler) AddCity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	city, err := h.cities.Add(r.Context(), userID, body.City)
+	city, err := h.cities.Add(r.Context(), claims.UserID, body.City)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusCreated, city)
 }
-func (h *UserHandler) GetCities(w http.ResponseWriter, r *http.Request) {
-	userID, err := parseID(r, "id")
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid id"})
-		return
-	}
 
-	cities, err := h.cities.GetByUser(r.Context(), userID)
+func (h *UserHandler) GetCities(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFrom(r.Context())
+
+	cities, err := h.cities.GetByUser(r.Context(), claims.UserID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
@@ -143,11 +103,7 @@ func (h *UserHandler) GetCities(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) DeleteCity(w http.ResponseWriter, r *http.Request) {
-	userID, err := parseID(r, "id")
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid user id"})
-		return
-	}
+	claims := middleware.ClaimsFrom(r.Context())
 
 	cityID, err := parseID(r, "city_id")
 	if err != nil {
@@ -155,7 +111,7 @@ func (h *UserHandler) DeleteCity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.cities.Delete(r.Context(), userID, cityID); err != nil {
+	if err := h.cities.Delete(r.Context(), claims.UserID, cityID); err != nil {
 		writeJSON(w, http.StatusNotFound, ErrorResponse{Error: "city not found"})
 		return
 	}
@@ -163,13 +119,9 @@ func (h *UserHandler) DeleteCity(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) GetUserWeather(w http.ResponseWriter, r *http.Request) {
-	id, err := parseID(r, "id")
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid id"})
-		return
-	}
+	claims := middleware.ClaimsFrom(r.Context())
 
-	result, err := h.weather.GetWeatherForUser(r.Context(), id)
+	result, err := h.weather.GetWeatherForUser(r.Context(), claims.UserID)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
@@ -178,11 +130,7 @@ func (h *UserHandler) GetUserWeather(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) GetWeatherHistory(w http.ResponseWriter, r *http.Request) {
-	id, err := parseID(r, "id")
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid id"})
-		return
-	}
+	claims := middleware.ClaimsFrom(r.Context())
 
 	filter := repository.HistoryFilter{
 		City: r.URL.Query().Get("city"),
@@ -206,7 +154,7 @@ func (h *UserHandler) GetWeatherHistory(w http.ResponseWriter, r *http.Request) 
 		filter.Offset = offset
 	}
 
-	result, err := h.weather.GetHistory(r.Context(), id, filter)
+	result, err := h.weather.GetHistory(r.Context(), claims.UserID, filter)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
