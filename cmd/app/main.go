@@ -4,13 +4,13 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"weather-api/internal/client"
+	"weather-api/internal/config"
 	"weather-api/internal/handler"
 	"weather-api/internal/middleware"
 	"weather-api/internal/repository"
@@ -18,17 +18,12 @@ import (
 )
 
 func main() {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		log.Fatal("DATABASE_URL env var is required")
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		log.Fatal("JWT_SECRET env var is required")
-	}
-
-	db, err := pgxpool.New(context.Background(), dbURL)
+	db, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("connect to db: %v", err)
 	}
@@ -38,7 +33,7 @@ func main() {
 		log.Fatalf("ping db: %v", err)
 	}
 
-	// repo
+	// repositories
 	userRepo := repository.NewUserRepo(db)
 	cityRepo := repository.NewCityRepo(db)
 	historyRepo := repository.NewHistoryRepo(db)
@@ -47,26 +42,27 @@ func main() {
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 	weatherClient := client.NewWeatherClient(httpClient)
 	weatherService := service.NewWeatherService(weatherClient)
-	userService := service.NewUserService(userRepo)
-	authService := service.NewAuthService(userRepo, jwtSecret)
+	userService := service.NewUserService(userRepo, cityRepo)
+	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
 	userWeatherService := service.NewUserWeatherService(userRepo, cityRepo, historyRepo, weatherService)
 
 	// handlers
 	weatherHandler := handler.NewWeatherHandler(weatherService)
-	userHandler := handler.NewUserHandler(userService, userWeatherService, cityRepo)
+	userHandler := handler.NewUserHandler(userService, userWeatherService)
 	authHandler := handler.NewAuthHandler(authService)
 
-	auth := middleware.Auth(jwtSecret)
+	auth := middleware.Auth(cfg.JWTSecret)
 	adminOnly := middleware.RequireRole("admin")
 
 	router := chi.NewRouter()
 
-	// public
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
+
+	// public auth
 	router.Post("/auth/register", authHandler.Register)
 	router.Post("/auth/login", authHandler.Login)
 
@@ -86,11 +82,11 @@ func main() {
 		r.Get("/cities", userHandler.GetCities)
 		r.Delete("/cities/{city_id}", userHandler.DeleteCity)
 
+		r.Get("/weather/history", userHandler.GetWeatherHistory)
 		r.Get("/users/weather", userHandler.GetUserWeather)
-		r.Get("/users/weather/history", userHandler.GetWeatherHistory)
 	})
 
-	// only admin routes
+	// admin routes
 	router.Group(func(r chi.Router) {
 		r.Use(auth)
 		r.Use(adminOnly)
@@ -100,9 +96,8 @@ func main() {
 		r.Delete("/users/{id}", userHandler.DeleteUser)
 	})
 
-	addr := ":8080"
-	log.Printf("server started on %s", addr)
-	if err := http.ListenAndServe(addr, router); err != nil {
+	log.Printf("server started on %s", cfg.Addr)
+	if err := http.ListenAndServe(cfg.Addr, router); err != nil {
 		log.Fatal(err)
 	}
 }

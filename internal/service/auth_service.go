@@ -7,19 +7,19 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"weather-api/internal/auth"
-	"weather-api/internal/repository"
+	"weather-api/internal/model"
 )
 
 type AuthService struct {
-	repo   *repository.UserRepo
+	repo   UserRepository
 	secret string
 }
 
-func NewAuthService(repo *repository.UserRepo, secret string) *AuthService {
+func NewAuthService(repo UserRepository, secret string) *AuthService {
 	return &AuthService{repo: repo, secret: secret}
 }
 
-func (s *AuthService) Register(ctx context.Context, name, email, password string) (*repository.User, error) {
+func (s *AuthService) Register(ctx context.Context, name, email, password string) (*model.User, error) {
 	if name == "" || email == "" || password == "" {
 		return nil, fmt.Errorf("name, email and password are required")
 	}

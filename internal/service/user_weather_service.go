@@ -4,20 +4,20 @@ import (
 	"context"
 	"fmt"
 
-	"weather-api/internal/repository"
+	"weather-api/internal/model"
 )
 
 type UserWeatherService struct {
-	users   *repository.UserRepo
-	cities  *repository.CityRepo
-	history *repository.HistoryRepo
+	users   UserRepository
+	cities  CityRepository
+	history HistoryRepository
 	weather *WeatherService
 }
 
 func NewUserWeatherService(
-	users *repository.UserRepo,
-	cities *repository.CityRepo,
-	history *repository.HistoryRepo,
+	users UserRepository,
+	cities CityRepository,
+	history HistoryRepository,
 	weather *WeatherService,
 ) *UserWeatherService {
 	return &UserWeatherService{
@@ -28,12 +28,7 @@ func NewUserWeatherService(
 	}
 }
 
-type UserWeatherResult struct {
-	UserID  int              `json:"user_id"`
-	Results []*WeatherResult `json:"results"`
-}
-
-func (s *UserWeatherService) GetWeatherForUser(ctx context.Context, userID int) (*UserWeatherResult, error) {
+func (s *UserWeatherService) GetWeatherForUser(ctx context.Context, userID int) (*model.UserWeather, error) {
 	if _, err := s.users.GetByID(ctx, userID); err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
@@ -44,11 +39,11 @@ func (s *UserWeatherService) GetWeatherForUser(ctx context.Context, userID int) 
 	}
 
 	if len(cities) == 0 {
-		return &UserWeatherResult{UserID: userID, Results: []*WeatherResult{}}, nil
+		return &model.UserWeather{UserID: userID, Results: []*model.Weather{}}, nil
 	}
 
 	type fetchResult struct {
-		weather *WeatherResult
+		weather *model.Weather
 		err     error
 	}
 
@@ -61,7 +56,7 @@ func (s *UserWeatherService) GetWeatherForUser(ctx context.Context, userID int) 
 		}()
 	}
 
-	results := make([]*WeatherResult, 0, len(cities))
+	results := make([]*model.Weather, 0, len(cities))
 	for range cities {
 		r := <-ch
 		if r.err == nil {
@@ -73,28 +68,18 @@ func (s *UserWeatherService) GetWeatherForUser(ctx context.Context, userID int) 
 		_ = s.history.Save(ctx, userID, w.City, w.Temperature, w.Description)
 	}
 
-	return &UserWeatherResult{UserID: userID, Results: results}, nil
+	return &model.UserWeather{UserID: userID, Results: results}, nil
 }
 
-type HistoryResponse struct {
-	UserID  int                          `json:"user_id"`
-	City    string                       `json:"city,omitempty"`
-	History []*repository.WeatherHistory `json:"history"`
-}
-
-func (s *UserWeatherService) GetHistory(ctx context.Context, userID int, filter repository.HistoryFilter) (*HistoryResponse, error) {
+func (s *UserWeatherService) GetHistory(ctx context.Context, userID int, filter model.HistoryFilter) (int, []*model.WeatherHistory, error) {
 	if _, err := s.users.GetByID(ctx, userID); err != nil {
-		return nil, fmt.Errorf("user not found: %w", err)
+		return 0, nil, fmt.Errorf("user not found: %w", err)
 	}
 
 	history, err := s.history.Get(ctx, userID, filter)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 
-	return &HistoryResponse{
-		UserID:  userID,
-		City:    filter.City,
-		History: history,
-	}, nil
+	return userID, history, nil
 }

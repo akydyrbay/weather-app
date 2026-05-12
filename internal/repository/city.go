@@ -5,13 +5,9 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-)
 
-type City struct {
-	ID     int    `json:"id"`
-	UserID int    `json:"user_id"`
-	City   string `json:"city"`
-}
+	"weather-api/internal/model"
+)
 
 type CityRepo struct {
 	db *pgxpool.Pool
@@ -21,8 +17,8 @@ func NewCityRepo(db *pgxpool.Pool) *CityRepo {
 	return &CityRepo{db: db}
 }
 
-func (r *CityRepo) Add(ctx context.Context, userID int, city string) (*City, error) {
-	var c City
+func (r *CityRepo) Add(ctx context.Context, userID int, city string) (*model.City, error) {
+	var c model.City
 	err := r.db.QueryRow(ctx,
 		`INSERT INTO user_cities (user_id, city)
 		 VALUES ($1, $2)
@@ -36,7 +32,7 @@ func (r *CityRepo) Add(ctx context.Context, userID int, city string) (*City, err
 	return &c, nil
 }
 
-func (r *CityRepo) GetByUser(ctx context.Context, userID int) ([]*City, error) {
+func (r *CityRepo) GetByUser(ctx context.Context, userID int) ([]*model.City, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT id, user_id, city
 		 FROM user_cities
@@ -49,9 +45,9 @@ func (r *CityRepo) GetByUser(ctx context.Context, userID int) ([]*City, error) {
 	}
 	defer rows.Close()
 
-	var cities []*City
+	var cities []*model.City
 	for rows.Next() {
-		var c City
+		var c model.City
 		if err := rows.Scan(&c.ID, &c.UserID, &c.City); err != nil {
 			return nil, fmt.Errorf("scan city: %w", err)
 		}

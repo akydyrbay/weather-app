@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+
+	"weather-api/internal/model"
 )
 
 type WeatherProvider interface {
@@ -22,18 +24,6 @@ type ProviderWeatherResponse struct {
 	Time        string
 }
 
-type WeatherResult struct {
-	City        string  `json:"city"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
-	Temperature float64 `json:"temperature"`
-	WindSpeed   float64 `json:"wind_speed"`
-	WeatherCode int     `json:"weather_code"`
-	Time        string  `json:"time"`
-	Description string  `json:"description"`
-	Clothing    string  `json:"clothing,omitempty"`
-}
-
 type WeatherService struct {
 	provider WeatherProvider
 }
@@ -44,13 +34,13 @@ func NewWeatherService(provider WeatherProvider) *WeatherService {
 	}
 }
 
-func (s *WeatherService) GetWeather(ctx context.Context, lat, lon float64) (*WeatherResult, error) {
+func (s *WeatherService) GetWeather(ctx context.Context, lat, lon float64) (*model.Weather, error) {
 	resp, err := s.provider.GetCurrentWeather(ctx, lat, lon)
 	if err != nil {
 		return nil, fmt.Errorf("get weather from provider: %w", err)
 	}
 
-	return &WeatherResult{
+	return &model.Weather{
 		Latitude:    lat,
 		Longitude:   lon,
 		Temperature: resp.Temperature,
@@ -61,15 +51,13 @@ func (s *WeatherService) GetWeather(ctx context.Context, lat, lon float64) (*Wea
 	}, nil
 }
 
-func (s *WeatherService) GetCityWeather(ctx context.Context, city string) (*WeatherResult, error) {
+func (s *WeatherService) GetCityWeather(ctx context.Context, city string) (*model.Weather, error) {
 	resp, err := s.provider.GetCurrentCityWeather(ctx, city)
 	if err != nil {
 		return nil, fmt.Errorf("get city weather from provider: %w", err)
 	}
 
-	clothing := getClothingRecommendation(resp.Temperature)
-
-	return &WeatherResult{
+	return &model.Weather{
 		City:        city,
 		Latitude:    resp.Latitude,
 		Longitude:   resp.Longitude,
@@ -78,19 +66,19 @@ func (s *WeatherService) GetCityWeather(ctx context.Context, city string) (*Weat
 		WeatherCode: resp.WeatherCode,
 		Time:        resp.Time,
 		Description: mapWeatherCode(resp.WeatherCode),
-		Clothing:    clothing,
+		Clothing:    getClothingRecommendation(resp.Temperature),
 	}, nil
 }
 
-func (s *WeatherService) GetCountryWeather(ctx context.Context, country string) ([]*WeatherResult, error) {
+func (s *WeatherService) GetCountryWeather(ctx context.Context, country string) ([]*model.Weather, error) {
 	resps, err := s.provider.GetCurrentCountryWeather(ctx, country)
 	if err != nil {
 		return nil, fmt.Errorf("get country weather from provider: %w", err)
 	}
 
-	results := make([]*WeatherResult, len(resps))
+	results := make([]*model.Weather, len(resps))
 	for i, resp := range resps {
-		results[i] = &WeatherResult{
+		results[i] = &model.Weather{
 			City:        resp.City,
 			Latitude:    resp.Latitude,
 			Longitude:   resp.Longitude,
@@ -104,15 +92,15 @@ func (s *WeatherService) GetCountryWeather(ctx context.Context, country string) 
 	return results, nil
 }
 
-func (s *WeatherService) GetCountryWeatherTop(ctx context.Context, country string) ([]*WeatherResult, error) {
+func (s *WeatherService) GetCountryWeatherTop(ctx context.Context, country string) ([]*model.Weather, error) {
 	resps, err := s.provider.GetCurrentCountryWeatherTop(ctx, country)
 	if err != nil {
 		return nil, fmt.Errorf("get country weather top from provider: %w", err)
 	}
 
-	results := make([]*WeatherResult, len(resps))
+	results := make([]*model.Weather, len(resps))
 	for i, resp := range resps {
-		results[i] = &WeatherResult{
+		results[i] = &model.Weather{
 			City:        resp.City,
 			Latitude:    resp.Latitude,
 			Longitude:   resp.Longitude,
@@ -125,6 +113,7 @@ func (s *WeatherService) GetCountryWeatherTop(ctx context.Context, country strin
 	}
 	return results, nil
 }
+
 func getClothingRecommendation(temp float64) string {
 	if temp < 5 {
 		return "тёплая одежда"

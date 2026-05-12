@@ -8,28 +8,23 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"weather-api/internal/service"
+	"weather-api/internal/dto"
+	"weather-api/internal/model"
 )
 
-type Service interface {
-	GetWeather(ctx context.Context, lat, lon float64) (*service.WeatherResult, error)
-	GetCityWeather(ctx context.Context, city string) (*service.WeatherResult, error)
-	GetCountryWeather(ctx context.Context, country string) ([]*service.WeatherResult, error)
-	GetCountryWeatherTop(ctx context.Context, country string) ([]*service.WeatherResult, error)
+type weatherSvc interface {
+	GetWeather(ctx context.Context, lat, lon float64) (*model.Weather, error)
+	GetCityWeather(ctx context.Context, city string) (*model.Weather, error)
+	GetCountryWeather(ctx context.Context, country string) ([]*model.Weather, error)
+	GetCountryWeatherTop(ctx context.Context, country string) ([]*model.Weather, error)
 }
 
 type WeatherHandler struct {
-	service Service
+	service weatherSvc
 }
 
-func NewWeatherHandler(service Service) *WeatherHandler {
-	return &WeatherHandler{
-		service: service,
-	}
-}
-
-type ErrorResponse struct {
-	Error string `json:"error"`
+func NewWeatherHandler(service weatherSvc) *WeatherHandler {
+	return &WeatherHandler{service: service}
 }
 
 func (h *WeatherHandler) GetWeather(w http.ResponseWriter, r *http.Request) {
@@ -37,97 +32,77 @@ func (h *WeatherHandler) GetWeather(w http.ResponseWriter, r *http.Request) {
 	lonStr := r.URL.Query().Get("lon")
 
 	if latStr == "" || lonStr == "" {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: "query params lat and lon are required",
-		})
+		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "query params lat and lon are required"})
 		return
 	}
 
 	lat, err := strconv.ParseFloat(latStr, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: "invalid lat",
-		})
+		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "invalid lat"})
 		return
 	}
 
 	lon, err := strconv.ParseFloat(lonStr, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: "invalid lon",
-		})
+		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "invalid lon"})
 		return
 	}
 
 	result, err := h.service.GetWeather(r.Context(), lat, lon)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, ErrorResponse{
-			Error: err.Error(),
-		})
+		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, dto.WeatherFromModel(result))
 }
 
 func (h *WeatherHandler) GetCityWeather(w http.ResponseWriter, r *http.Request) {
 	city := chi.URLParam(r, "city")
 	if city == "" {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: "city parameter is required",
-		})
+		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "city parameter is required"})
 		return
 	}
 
 	result, err := h.service.GetCityWeather(r.Context(), city)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, ErrorResponse{
-			Error: err.Error(),
-		})
+		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, dto.WeatherFromModel(result))
 }
 
 func (h *WeatherHandler) GetCountryWeather(w http.ResponseWriter, r *http.Request) {
 	country := chi.URLParam(r, "country")
 	if country == "" {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: "country parameter is required",
-		})
+		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "country parameter is required"})
 		return
 	}
 
 	results, err := h.service.GetCountryWeather(r.Context(), country)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, ErrorResponse{
-			Error: err.Error(),
-		})
+		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, results)
+	writeJSON(w, http.StatusOK, dto.WeathersFromModel(results))
 }
 
 func (h *WeatherHandler) GetCountryWeatherTop(w http.ResponseWriter, r *http.Request) {
 	country := chi.URLParam(r, "country")
 	if country == "" {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: "country parameter is required",
-		})
+		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "country parameter is required"})
 		return
 	}
 
 	results, err := h.service.GetCountryWeatherTop(r.Context(), country)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, ErrorResponse{
-			Error: err.Error(),
-		})
+		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, results)
+	writeJSON(w, http.StatusOK, dto.WeathersFromModel(results))
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {

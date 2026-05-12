@@ -3,25 +3,11 @@ package repository
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"weather-api/internal/model"
 )
-
-type WeatherHistory struct {
-	ID          int       `json:"id"`
-	UserID      int       `json:"user_id"`
-	City        string    `json:"city"`
-	Temperature float64   `json:"temperature"`
-	Description string    `json:"description"`
-	RequestedAt time.Time `json:"requested_at"`
-}
-
-type HistoryFilter struct {
-	City   string
-	Limit  int
-	Offset int
-}
 
 type HistoryRepo struct {
 	db *pgxpool.Pool
@@ -43,7 +29,7 @@ func (r *HistoryRepo) Save(ctx context.Context, userID int, city string, tempera
 	return nil
 }
 
-func (r *HistoryRepo) Get(ctx context.Context, userID int, f HistoryFilter) ([]*WeatherHistory, error) {
+func (r *HistoryRepo) Get(ctx context.Context, userID int, f model.HistoryFilter) ([]*model.WeatherHistory, error) {
 	args := []any{userID}
 
 	query := `SELECT id, user_id, city, temperature, description, requested_at
@@ -73,9 +59,9 @@ func (r *HistoryRepo) Get(ctx context.Context, userID int, f HistoryFilter) ([]*
 	}
 	defer rows.Close()
 
-	results := make([]*WeatherHistory, 0)
+	results := make([]*model.WeatherHistory, 0)
 	for rows.Next() {
-		var h WeatherHistory
+		var h model.WeatherHistory
 		if err := rows.Scan(&h.ID, &h.UserID, &h.City, &h.Temperature, &h.Description, &h.RequestedAt); err != nil {
 			return nil, fmt.Errorf("scan history: %w", err)
 		}

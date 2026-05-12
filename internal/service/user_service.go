@@ -4,39 +4,41 @@ import (
 	"context"
 	"fmt"
 
-	"weather-api/internal/repository"
+	"weather-api/internal/model"
 )
 
 type UserService struct {
-	repo *repository.UserRepo
+	users  UserRepository
+	cities CityRepository
 }
 
-func NewUserService(repo *repository.UserRepo) *UserService {
-	return &UserService{repo: repo}
+func NewUserService(users UserRepository, cities CityRepository) *UserService {
+	return &UserService{users: users, cities: cities}
 }
 
-func (s *UserService) Create(ctx context.Context, name, email string) (*repository.User, error) {
-	if name == "" || email == "" {
-		return nil, fmt.Errorf("name and email are required")
-	}
-	return s.repo.Create(ctx, name, email)
+func (s *UserService) GetAll(ctx context.Context) ([]*model.User, error) {
+	return s.users.GetAll(ctx)
 }
 
-func (s *UserService) GetAll(ctx context.Context) ([]*repository.User, error) {
-	return s.repo.GetAll(ctx)
-}
-
-func (s *UserService) GetByID(ctx context.Context, id int) (*repository.User, error) {
-	return s.repo.GetByID(ctx, id)
-}
-
-func (s *UserService) Update(ctx context.Context, id int, name, email string) (*repository.User, error) {
-	if name == "" || email == "" {
-		return nil, fmt.Errorf("name and email are required")
-	}
-	return s.repo.Update(ctx, id, name, email)
+func (s *UserService) GetByID(ctx context.Context, id int) (*model.User, error) {
+	return s.users.GetByID(ctx, id)
 }
 
 func (s *UserService) Delete(ctx context.Context, id int) error {
-	return s.repo.SoftDelete(ctx, id)
+	return s.users.SoftDelete(ctx, id)
+}
+
+func (s *UserService) AddCity(ctx context.Context, userID int, city string) (*model.City, error) {
+	if city == "" {
+		return nil, fmt.Errorf("city is required")
+	}
+	return s.cities.Add(ctx, userID, city)
+}
+
+func (s *UserService) GetCities(ctx context.Context, userID int) ([]*model.City, error) {
+	return s.cities.GetByUser(ctx, userID)
+}
+
+func (s *UserService) DeleteCity(ctx context.Context, userID, cityID int) error {
+	return s.cities.Delete(ctx, userID, cityID)
 }
