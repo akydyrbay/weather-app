@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"weather-api/internal/model"
+	"weather-app/internal/model"
 )
 
 type CityRepo struct {

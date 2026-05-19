@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"weather-api/internal/service"
+	"weather-app/internal/service"
 )
 
 const cacheTTL = 5 * time.Minute

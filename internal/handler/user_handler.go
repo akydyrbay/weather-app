@@ -8,9 +8,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"weather-api/internal/dto"
-	"weather-api/internal/middleware"
-	"weather-api/internal/model"
+	"weather-app/internal/dto"
+	"weather-app/internal/middleware"
+	"weather-app/internal/model"
 )
 
 type userSvc interface {

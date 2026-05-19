@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"weather-api/internal/dto"
-	"weather-api/internal/model"
+	"weather-app/internal/dto"
+	"weather-app/internal/model"
 )
 
 type authSvc interface {

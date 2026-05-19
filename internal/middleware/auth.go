@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"weather-api/internal/auth"
+	"weather-app/internal/auth"
 )
 
 type contextKey string
@@ -50,6 +50,10 @@ func RequireRole(role string) func(http.Handler) http.Handler {
 func ClaimsFrom(ctx context.Context) *auth.Claims {
 	v, _ := ctx.Value(claimsKey).(*auth.Claims)
 	return v
+}
+
+func WithClaims(ctx context.Context, claims *auth.Claims) context.Context {
+	return context.WithValue(ctx, claimsKey, claims)
 }
 
 func writeErr(w http.ResponseWriter, status int, msg string) {

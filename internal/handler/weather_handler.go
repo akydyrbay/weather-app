@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"weather-api/internal/dto"
-	"weather-api/internal/model"
+	"weather-app/internal/dto"
+	"weather-app/internal/model"
 )
 
 type weatherSvc interface {

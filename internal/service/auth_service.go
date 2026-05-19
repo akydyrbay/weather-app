@@ -6,8 +6,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"weather-api/internal/auth"
-	"weather-api/internal/model"
+	"weather-app/internal/auth"
+	"weather-app/internal/model"
 )
 
 type AuthService struct {

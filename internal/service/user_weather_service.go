@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"weather-api/internal/model"
+	"weather-app/internal/model"
 )
 
 type UserWeatherService struct {

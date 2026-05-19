@@ -141,10 +141,10 @@ curl http://localhost:8080/users/weather -H "Authorization: Bearer <token>"
 > Требует авторизацию.
 
 ```bash
-curl "http://localhost:8080/users/weather/history?city=Almaty&limit=10" \
+curl "http://localhost:8080/weather/history?city=Almaty&limit=10" \
   -H "Authorization: Bearer <token>"
 
-curl "http://localhost:8080/users/weather/history?limit=20&offset=40" \
+curl "http://localhost:8080/weather/history?limit=20&offset=40" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -175,7 +175,22 @@ curl "http://localhost:8080/users/weather/history?limit=20&offset=40" \
 - **golang-jwt/jwt/v5** - JWT аутентификация
 - **bcrypt** - хэширование паролей
 - **Open Meteo** - погода и геокодинг (без ключа)
+- **Uber Zap** - structured logging + logging middleware (method, path, status, duration, request_id)
+- **testify** (assert / require / mock) - unit-тесты + mock-репозитории
 - Параллельные запросы к API через горутины
 - Кэш погоды в памяти (TTL 5 минут)
 - Мягкое удаление пользователей
 - Индекс `(user_id, city)` для быстрой фильтрации истории
+
+## Тесты
+
+```bash
+go test -v ./...
+
+go test -cover ./...
+
+TEST_DATABASE_URL=postgres://akydyrbay@/weather_db \
+  go test -tags integration -v ./internal/repository/...
+```
+
+Мок репозитории живут в `internal/service/mocks/` - используются в `service` и `handler` юнит тестах, не ходя в БД.

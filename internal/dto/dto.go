@@ -3,7 +3,7 @@ package dto
 import (
 	"time"
 
-	"weather-api/internal/model"
+	"weather-app/internal/model"
 )
 
 type RegisterRequest struct {

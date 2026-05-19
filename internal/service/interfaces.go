@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"weather-api/internal/model"
+	"weather-app/internal/model"
 )
 
 type UserRepository interface {
