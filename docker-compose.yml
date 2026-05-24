@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: weather
+      POSTGRES_PASSWORD: weather
+      POSTGRES_DB: weather_db
+    volumes:
+      - ./api-service/migrations:/docker-entrypoint-initdb.d:ro
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U weather -d weather_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  gateway-service:
+    build:
+      context: ./gateway-service
+    environment:
+      ADDR: ":8081"
+      REQUEST_TIMEOUT: "10s"
+    ports:
+      - "8081:8081"
+
+  api-service:
+    build:
+      context: ./api-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      gateway-service:
+        condition: service_started
+    environment:
+      ADDR: ":8080"
+      DATABASE_URL: "postgres://weather:weather@postgres:5432/weather_db?sslmode=disable"
+      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+      GATEWAY_URL: "http://gateway-service:8081"
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
